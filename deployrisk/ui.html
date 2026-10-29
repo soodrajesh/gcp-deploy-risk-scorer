@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deploy Risk Scorer</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#14181f;--mute:#5d6674;--line:#e2e5ea;--accent:#2a5bd7;--crit:#b3261e;--high:#c2410c;--med:#a16207;--low:#157f4b;--chip:#eef1f5}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--panel:#171b23;--ink:#e8ebf0;--mute:#98a1b0;--line:#2a303b;--accent:#7aa2ff;--crit:#ff8a80;--high:#fb923c;--med:#facc15;--low:#5fd39a;--chip:#232936}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:14px 24px;background:var(--panel);border-bottom:1px solid var(--line)}header h1{font-size:17px;margin:0;font-weight:650}.badges{margin-left:auto;display:flex;gap:8px}
+.badge{font-size:12px;padding:2px 9px;border:1px solid var(--line);border-radius:999px;color:var(--mute);background:var(--bg)}
+main{display:grid;grid-template-columns:380px 1fr;gap:20px;padding:20px 24px;max-width:1300px;margin:auto}@media(max-width:960px){main{grid-template-columns:1fr;padding:16px}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}.card h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:0 0 10px;font-weight:600}
+label{display:block;font-size:12px;color:var(--mute);margin:8px 0 3px}select,input,textarea{font:inherit;color:var(--ink);width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px}textarea{height:200px;font:11px/1.4 ui-monospace,Menlo,monospace}
+button{font:inherit;background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 14px;font-weight:600;cursor:pointer;margin-top:10px;width:100%}button.sec{background:var(--chip);color:var(--ink);font-weight:500;margin:3px 0;text-align:left}button:disabled{opacity:.5;cursor:wait}
+.hist{list-style:none;margin:0;padding:0}.hist li{display:flex;gap:8px;align-items:center;padding:7px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:6px}.hist li:hover,.hist li.sel{background:var(--bg)}
+.banner{display:flex;gap:24px;align-items:center;flex-wrap:wrap;padding:16px 18px;border-radius:10px;margin-bottom:16px;border:1px solid var(--line);background:var(--panel)}.big{font-size:26px;font-weight:750}.low .big{color:var(--low)}.medium .big{color:var(--med)}.high .big{color:var(--high)}.critical .big{color:var(--crit)}
+.gauge{flex:1;min-width:220px}.gauge .track{height:12px;border-radius:6px;background:linear-gradient(90deg,var(--low) 0 50%,var(--med) 50% 80%,var(--high) 80% 95%,var(--crit) 95%);position:relative;opacity:.9}.gauge .pin{position:absolute;top:-4px;width:4px;height:20px;background:var(--ink);border-radius:2px}
+.m{color:var(--mute);font-size:13px}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 6px;text-align:left;border-bottom:1px solid var(--line)}th{font-size:11px;text-transform:uppercase;color:var(--mute)}
+.bar{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px}.bar .l{width:260px;color:var(--mute)}.bar .t{flex:1;height:10px;background:var(--bg);border-radius:5px;position:relative}.bar .f{position:absolute;top:0;bottom:0;border-radius:5px}.bar .up{background:var(--crit);left:50%}.bar .dn{background:var(--low);right:50%}.bar .v{width:44px;text-align:right;color:var(--mute)}
+.flag{border-left:4px solid var(--med);padding:6px 10px;margin:8px 0;background:var(--bg);border-radius:0 6px 6px 0}.flag.high{border-color:var(--high)}.flag.critical{border-color:var(--crit)}
+.gates{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}@media(max-width:700px){.gates{grid-template-columns:repeat(2,1fr)}}.g{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}.g b{display:block;font-size:20px}.g span{font-size:11px;color:var(--mute);text-transform:uppercase}
+.err{color:var(--crit);font-size:13px;margin-top:8px}.warn{background:color-mix(in srgb,var(--med) 16%,transparent);color:var(--med);padding:8px 12px;border-radius:8px;margin-bottom:10px;font-size:13px}
+</style>
+</head>
+<body>
+<header><h1>Deploy Risk Scorer</h1><span class="badge">a model trained on real commit history, plus gates no model can lower</span><div class="badges" id="badges"></div></header>
+<main>
+<aside>
+ <div class="card"><h2>Change</h2>
+  <label>Examples</label><div id="ex"></div>
+  <label>Unified diff (<code>git diff</code>)</label><textarea id="diff" spellcheck="false" placeholder="Paste a diff or pick an example"></textarea>
+  <label>Commit message</label><input id="msg" placeholder="e.g. fix: handle empty input">
+  <label>Service traffic</label><select id="tier"><option value="normal">normal</option><option value="high">high</option></select>
+  <label>Model commentary</label><select id="llm"></select>
+  <button id="go">Score this change</button><div class="err" id="err"></div></div>
+ <div class="card"><h2>Recent</h2><ul class="hist" id="hist"></ul></div>
+</aside>
+<section id="out"><div class="card m" style="padding:40px;text-align:center">Pick an example or paste a diff. The diff is parsed locally by the service; the model never receives code or file names.</div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let cfg={},cur=null;
+const hunk=(file,adds,dels,extra="")=>`diff --git a/${file} b/${file}\n${extra}--- a/${file}\n+++ b/${file}\n@@ -1,${dels.length} +1,${adds.length} @@\n${dels.map(l=>"-"+l).join("\n")}${dels.length?"\n":""}${adds.map(l=>"+"+l).join("\n")}\n`;
+const EX={
+ "Docs typo":[hunk("README.md",["Usage: run the tool"],["Usage: run teh tool"]),"docs: fix typo"],
+ "Small fix with a test":[hunk("src/orders.py",["    if not items:","        return 0"],["    return sum(i.total for i in items)"])+hunk("tests/test_orders.py",["def test_empty():","    assert total([]) == 0"],[]),"fix: handle empty order"],
+ "Destructive migration":[hunk("db/migrations/0042_cleanup.sql",["DROP TABLE legacy_users;","ALTER TABLE orders DROP COLUMN notes;"],[],"new file mode 100644\n"),"cleanup old tables"],
+ "Terraform opens access":[hunk("infra/firewall.tf",['  source_ranges = ["0.0.0.0/0"]',"  deletion_protection = false"],['  source_ranges = ["10.0.0.0/8"]']),"open firewall for the demo"],
+ "Large refactor":[Array.from({length:34},(_,i)=>hunk(`src/mod${i}.py`,Array.from({length:55},(_,k)=>`def f${k}(): pass`),Array.from({length:20},(_,k)=>`def g${k}(): pass`))).join("")+hunk("infra/iam.tf",["# new roles"],[]),"big refactor"]};
+async function api(p,o){const r=await fetch(p,o);const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.detail||r.statusText);return b}
+async function init(){cfg=await api("/api/config");const m=await api("/api/model");
+ $("badges").innerHTML=`<span class="badge">model: ${esc(cfg.provider)}</span><span class="badge">trained on ${m.meta.commits.toLocaleString()} commits · holdout AUC ${m.evaluation?m.evaluation.auc.toFixed(2):"?"}</span>`;
+ $("llm").innerHTML=cfg.allowed_providers.map(p=>`<option ${p===cfg.provider?"selected":""}>${esc(p)}</option>`).join("");
+ $("ex").innerHTML=Object.keys(EX).map(k=>`<button class="sec" data-k="${esc(k)}">${esc(k)}</button>`).join("");
+ document.querySelectorAll("#ex button").forEach(b=>b.onclick=()=>{const [d,msg]=EX[b.dataset.k];$("diff").value=d;$("msg").value=msg});
+ $("go").onclick=go;await hist();const h=location.hash.slice(1);if(h)show(await api("/api/scores/"+h))}
+async function hist(){const rows=await api("/api/scores?limit=15");$("hist").innerHTML=rows.map(r=>`<li data-id="${esc(r.id)}" class="${cur===r.id?"sel":""}"><b>${esc(r.band)}</b><span class="m">${r.score}/100 · ${r.stats.files} files</span></li>`).join("")||`<li class="m" style="cursor:default">none yet</li>`;
+ document.querySelectorAll("#hist li[data-id]").forEach(li=>li.onclick=async()=>show(await api("/api/scores/"+li.dataset.id)))}
+async function go(){$("err").textContent="";$("go").disabled=true;$("go").textContent="Scoring…";
+ try{show(await api("/api/score",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({diff:$("diff").value,message:$("msg").value,traffic_tier:$("tier").value,llm:$("llm").value})}));await hist()}
+ catch(e){$("err").textContent=e.message}finally{$("go").disabled=false;$("go").textContent="Score this change"}}
+function show(s){cur=s.id;location.hash=s.id;const mx=Math.max(...s.factors.map(f=>Math.abs(f.contribution)),.01);
+ $("out").innerHTML=`<div class="banner ${s.band}"><div><div class="big">${s.band.toUpperCase()} RISK</div><div class="m">${Math.round(s.probability*100)}% chance of needing a follow-up fix · typical ${Math.round(s.baseline_probability*100)}%</div></div>
+  <div class="gauge"><div class="m">riskier than ${s.score}% of historical changes</div><div class="track"><div class="pin" style="left:calc(${s.score}% - 2px)"></div></div></div></div>
+ <div class="card"><h2>Why</h2><div class="m" style="margin-bottom:8px">${esc(s.band_reason)}</div>${s.factors.map(f=>`<div class="bar"><span class="l">${esc(f.why)}</span><span class="t"><span class="f ${f.contribution>0?"up":"dn"}" style="width:${Math.abs(f.contribution)/mx*50}%"></span></span><span class="v">${f.contribution>0?"+":""}${f.contribution.toFixed(2)}</span></div>`).join("")}${s.note?`<div style="margin-top:8px"><b>${esc(s.model)} note:</b> ${esc(s.note)}</div>`:""}</div>
+ ${s.degraded.map(d=>`<div class="warn">⚠ ${esc(d)}</div>`).join("")}${s.dropped.length?`<div class="card"><h2>Rejected model output</h2>${s.dropped.map(d=>`<div class="m">✗ ${esc(d.item)} — ${esc(d.reason)}</div>`).join("")}</div>`:""}
+ ${s.flags.length?`<div class="card"><h2>Flags that set a floor (no model can lower these)</h2>${s.flags.map(f=>`<div class="flag ${f.band}"><b>${esc(f.rule)} · ${esc(f.band)}</b> ${esc(f.title)} <span class="m">${esc(f.detail)}</span>${f.gate?`<div class="m">${esc(f.gate)}</div>`:""}</div>`).join("")}</div>`:""}
+ <div class="card"><h2>Gates for this change</h2><div class="gates"><div class="g"><b>${s.gates.canary_percent}%</b><span>first canary</span></div><div class="g"><b>${s.gates.bake_minutes} min</b><span>bake time</span></div><div class="g"><b>${s.gates.reviewers}</b><span>reviewer(s)</span></div><div class="g"><b>${s.gates.rollback_plan_required?"required":"optional"}</b><span>rollback plan</span></div></div>
+  <div class="m" style="margin-top:8px">Window: ${esc(s.gates.deploy_window)}</div>${s.gates.notes.map(n=>`<div class="m">• ${esc(n)}</div>`).join("")}</div>
+ <div class="card"><h2>Change summary</h2><table><tbody>${Object.entries(s.stats).map(([k,v])=>`<tr><td class="m">${esc(k.replaceAll("_"," "))}</td><td>${esc(v)}</td></tr>`).join("")}</tbody></table></div>`;
+ document.querySelectorAll("#hist li").forEach(li=>li.classList.toggle("sel",li.dataset.id===s.id))}
+init().catch(e=>{$("err").textContent=e.message});
+</script>
+</body>
+</html>
