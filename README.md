@@ -40,6 +40,12 @@ This is real but modest skill: it beats "bigger diffs are riskier" in every spli
 Things worth knowing about what it learned: files that were changed often before (hotspots) and files with a fix history are riskier; authors who know the files are safer; docs-only changes are safer;
 a commit message that says "fix" raises the score, because in this data fixes are often followed by further fixes. Repository age was deliberately removed as a feature after it improved headline numbers but was a time-trend artifact.
 
+## Architecture
+
+[![Architecture: private Cloud Run service, engine, read-only sources, optional Gemini, up.sh delivery](docs/img/architecture.png)](docs/img/architecture.svg)
+
+Regenerate with `python3 docs/diagrams/architecture.py` then `python3 docs/diagrams/render.py docs/img/architecture.svg docs/img/architecture.png` (needs Playwright).
+
 ## Quick start
 
 ```bash

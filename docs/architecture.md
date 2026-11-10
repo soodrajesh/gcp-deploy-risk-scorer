@@ -1,5 +1,7 @@
 # Architecture
 
+[![Architecture diagram](img/architecture.png)](img/architecture.svg)
+
 **Inputs.** A unified diff (`git diff`), or a commit in a local repository. The diff is reduced to per-file added/deleted counts, new/deleted/renamed/binary status, and (for content flags only) the added lines.
 With a repository, history features come from `git log --numstat --summary`.
 
